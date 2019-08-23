@@ -1,13 +1,13 @@
 // Make the DIV element draggable:
-dragElement(document.getElementById("chat"));
+dragElement(document.getElementById('chat'));
 
 function dragElement(elmnt) {
   var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-  if (document.getElementById(elmnt.id + "header")) {
+  if (document.getElementById(elmnt.id + 'header')) {
     // if present, the header is where you move the DIV from:
-    document.getElementById(elmnt.id + "header").onmousedown = dragMouseDown;
+    document.getElementById(elmnt.id + 'header').onmousedown = dragMouseDown;
   } else {
-    // otherwise, move the DIV from anywhere inside the DIV: 
+    // otherwise, move the DIV from anywhere inside the DIV:
     elmnt.onmousedown = dragMouseDown;
   }
 
@@ -31,8 +31,8 @@ function dragElement(elmnt) {
     pos3 = e.clientX;
     pos4 = e.clientY;
     // set the element's new position:
-    elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
-    elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+    elmnt.style.top = (elmnt.offsetTop - pos2) + 'px';
+    elmnt.style.left = (elmnt.offsetLeft - pos1) + 'px';
   }
 
   function closeDragElement() {
@@ -41,3 +41,36 @@ function dragElement(elmnt) {
     document.onmousemove = null;
   }
 }
+
+// const WebSocket = require('isomorphic-ws');
+
+const display = document.querySelector('#display');
+const input = document.querySelector('#input');
+const ws = new WebSocket('ws://localhost:8081');
+let user;
+ws.on = ws.addEventListener;
+
+ws.on('open', () => {
+  const raw = localStorage.getItem('wbsUser');
+  user = raw ? JSON.parse(raw) : void (0);
+  ws.send(JSON.stringify({method: 'init', user}));
+});
+
+ws.on('message', (pack) => {
+  const data = JSON.parse(pack.data);
+  if (data.state) {
+    // state negotiation
+  } else {
+    display.textContent += `\n${data.message || data.server}`;
+    if (data.server) {
+      localStorage.setItem('wbsUser', JSON.stringify({...data.user}));
+    }
+  }
+});
+
+input.addEventListener('keyup', (e) => {
+  if (e.code === 'Enter') {
+    ws.send(JSON.stringify({message: input.value, user}));
+    input.value = '';
+  }
+})
