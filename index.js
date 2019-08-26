@@ -47,7 +47,9 @@ function dragElement(elmnt) {
 const display = document.querySelector('#display');
 const input = document.querySelector('#input');
 //const ws = new WebSocket('ws://localhost:8081');
-const ws = new WebSocket('ws://seungissues-wbsimp-test2.herokuapp.com:8080');
+//const ws = new WebSocket('ws://seungissues-wbsimp-test2.herokuapp.com:8080');
+var HOST = location.origin.replace(/^http/, 'ws')
+var ws = new WebSocket(HOST);
 let user;
 ws.on = ws.addEventListener;
 

@@ -1,4 +1,4 @@
-const WebSocket = require("isomorphic-ws");
+const WebSocket = require("ws");
 
 const wss = new WebSocket.Server({ port: 8080 });
 const config = {
