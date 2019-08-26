@@ -62,15 +62,26 @@ ws.on('message', (pack) => {
     // state negotiation
   } else {
     display.textContent += `\n${data.message || data.server}`;
-    if (data.server) {
-      localStorage.setItem('wbsUser', JSON.stringify({...data.user}));
+    if (data.server && data.user) {
+      user = data.user;
+      localStorage.setItem('wbsUser', JSON.stringify(user));
     }
   }
 });
 
 input.addEventListener('keyup', (e) => {
   if (e.code === 'Enter') {
-    ws.send(JSON.stringify({message: input.value, user}));
+    let message = input.value; 
+    let method;
+    if (message.length && message[0] === '\\') {
+      message = message.split('');
+      method = message.splice(0, message.indexOf(' '));
+      message.shift()
+      method.shift()
+      method = method.join('');
+      message = message.join('');
+    }
+    ws.send(JSON.stringify({message, method}));
     input.value = '';
   }
 })
