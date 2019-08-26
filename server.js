@@ -1,6 +1,6 @@
 const WebSocket = require("isomorphic-ws");
 
-const wss = new WebSocket.Server({ port: 8081 });
+const wss = new WebSocket.Server({ port: 8080 });
 const config = {
   chans: {
     0: {
