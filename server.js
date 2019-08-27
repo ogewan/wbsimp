@@ -21,7 +21,7 @@ const deliver = (message, chanId, targetId) => {
   for (let client of wss.clients) {
     if ((targetId && client.id === targetId) ||
         (!targetId && config.users[client.id].chan === chanId)) {
-      client.send(JSON.stringify({message}));
+      client.send(message);
       if (targetId) {
         return;
       }
