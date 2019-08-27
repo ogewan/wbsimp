@@ -36,7 +36,7 @@ const broadcast = (message, user) => {
 
 const updateState = (state, user) => {
   config.chans[user.chan].sstates.push(state);
-  deliver(JSON.stringify({state}), user.chan);
+  deliver(JSON.stringify({state, user}), user.chan);
 };
 
 wss.on('connection', ws => {
