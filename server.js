@@ -31,7 +31,7 @@ const deliver = (message, chanId, targetId) => {
 const whisper = message => deliver(JSON.stringify(message));
 
 const broadcast = (message, user) => {
-  deliver(`${user.name || user.id}: ${message}`, user.chan);
+  deliver(JSON.stringify({message: `${user.name || user.id}: ${message}`}), user.chan);
 };
 
 const updateState = (state, user) => {
