@@ -40,6 +40,9 @@ const updateState = (state, user) => {
 };
 
 wss.on('connection', ws => {
+  const heartbeat = () => ws.send(JSON.stringify({heartbeat: true}));
+  setInterval(heartbeat, 1000);
+
   ws.on('message', data => {
     data = JSON.parse(data);
     const {message, method, state, target} = data;
