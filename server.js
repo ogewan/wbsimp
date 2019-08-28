@@ -107,7 +107,7 @@ wss.on('connection', ws => {
                 {server: `User (${other.id}) already has the name: ${name}`}));
           }
         } else {
-          const oldName = user.name;
+          const oldName = config.users[ws.id].name;
           config.users[ws.id].name = name;
           delete config.name2Id[oldName];
           ws.send(
