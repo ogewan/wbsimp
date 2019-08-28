@@ -75,7 +75,7 @@
 
         const display = document.querySelector('#display');
         const input = document.querySelector('#input');
-        var HOST = location.origin.replace(/^http/, 'ws')
+        var HOST = location.origin.replace(/^http/, 'ws');
         var ws = new WebSocket(HOST);
         let user;
         ws.on = ws.addEventListener;
@@ -88,8 +88,8 @@
 
         ws.on('message', (pack) => {
             const data = JSON.parse(pack.data);
-            if (data.state) {
-                // state negotiation
+            if (data.state || data.heartbeat) {
+                // Literally nothing
             } else {
                 display.textContent += `\n${data.message || data.server}`;
                 if (data.server && data.user) {
@@ -105,11 +105,17 @@
                 let method;
                 if (message.length && message[0] === '\\') {
                     message = message.split('');
-                    method = message.splice(0, message.indexOf(' '));
-                    message.shift()
-                    method.shift()
+                    const cmdend = message.indexOf(' ');
+                    if (cmdend > -1) {
+                        method = message.splice(0, message.indexOf(' '));
+                        message.shift();
+                        message = message.join('');
+                    } else {
+                        method = message;
+                        message = '';
+                    }
+                    method.shift();
                     method = method.join('');
-                    message = message.join('');
                 }
                 ws.send(JSON.stringify({ message, method }));
                 input.value = '';

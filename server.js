@@ -14,7 +14,7 @@ const wss = new SocketServer({server});
 const config = {
   chans: {0: {sstates: []}},
   users: {0: {}},
-  names: {}
+  name2Id: {}
 };
 
 const deliver = (message, chanId, targetId) => {
@@ -28,10 +28,14 @@ const deliver = (message, chanId, targetId) => {
     }
   }
 };
-const whisper = message => deliver(JSON.stringify(message));
 
-const broadcast = (message, user) => {
-  deliver(JSON.stringify({message: `${user.name || user.id}: ${message}`}), user.chan);
+const broadcast = (message, user, targetId) => {
+  deliver(
+      JSON.stringify({
+        message: `${user.name || user.id}: ${message}`,
+        whisper: (targetId) ? true : void (0)
+      }),
+      user.chan, targetId);
 };
 
 const updateState = (state, user) => {
@@ -45,9 +49,11 @@ wss.on('connection', ws => {
 
   ws.on('message', data => {
     data = JSON.parse(data);
-    const {message, method, state, target} = data;
+    let {method} = data;
+    const {message, state, target} = data;
 
     console.log(data);
+    if (!method) {method = 'message';}
     switch (method) {
       case 'init': {
         const id =
@@ -72,25 +78,51 @@ wss.on('connection', ws => {
         }
         break;
       }
+      case 'channel': {
+        const user = config.users[ws.id];
+        config.users[ws.id].chan = message;
+        ws.send(JSON.stringify({
+          server: `Connected as ${user.name ? user.name : ''}(${
+              user.id}) to Channel: ${user.chan}.`,
+          user
+        }));
+        if (!config.chans[user.chan]) {
+          config.chans[user.chan] = {sstates: []};
+          ws.send(JSON.stringify({server: `Created Channel ${user.chan}`}));
+        } else {
+          broadcast(`has joined!`, user);
+        }
+        break;
+      }
       case 'name': {
         const name = data.message;
-        config.users[ws.id].name = name;
-        const user = config.users[ws.id];
-        ws.send(JSON.stringify({server: `Changed name to ${user.name}`, user}));
+        if (config.name2Id[name]) {
+          const other = config.users[config.name2Id[name]];
+          const user = config.users[ws.id];
+
+          if (ws.id === other.id) {
+            ws.send(JSON.stringify({server: `Name is already ${user.name}`}));
+          } else {
+            ws.send(JSON.stringify(
+                {server: `User (${other.id}) already has the name: ${name}`}));
+          }
+        } else {
+          const oldName = user.name;
+          config.users[ws.id].name = name;
+          delete config.name2Id[oldName];
+          ws.send(
+              JSON.stringify({server: `Changed name to ${user.name}`, user}));
+        }
         break;
       }
       case 'whisper': {
         const user = config.users[ws.id];
-        const tid = config.names[target] || target;
+        const other = config.users[target];
+        // ID > name, if a user A's nick is user B's ID, send to user B, else
+        // send to user A
+        const tid = (other) ? other.id : config.name2Id[target] || target;
         if (config.users[tid]) {
-          deliver(
-              JSON.stringify({
-                id: user.id,
-                name: user.name || user.id,
-                message,
-                whisper: true
-              }),
-              user, tid);
+          broadcast(message, user, tid)
         } else {
           ws.send(JSON.stringify({server: `${tid} is not a valid user.`}));
         }
@@ -101,9 +133,13 @@ wss.on('connection', ws => {
         updateState(state, user);
         break;
       }
-      default: {
+      case 'message': {
         const user = config.users[ws.id];
         broadcast(message, user);
+        break;
+      }
+      default: {
+        ws.send(JSON.stringify({server: `${method} is not a valid command.`}));
       }
     }
   });
