@@ -12,8 +12,8 @@ const server = express()
 
 const wss = new SocketServer({server});
 const config = {
-  chans: {0: {sstates: []}},
-  users: {0: {}},
+  chans: {0: {state: false}},
+  users: {},
   name2Id: {}
 };
 
@@ -39,7 +39,15 @@ const broadcast = (message, user, targetId) => {
 };
 
 const updateState = (state, user) => {
-  config.chans[user.chan].sstates.push(state);
+  for (let chan of user.chan) {
+    let channel = config.chans[chan];
+    if (channel.sstates) {
+      channel.sstates.push(state);
+    }
+    else if (channel.state) {
+      channel.sstates = [state];
+    }
+  }
   deliver(JSON.stringify({state, user}), user.chan);
 };
 
@@ -50,9 +58,9 @@ wss.on('connection', ws => {
   ws.on('message', data => {
     data = JSON.parse(data);
     let {method} = data;
-    const {message, state, target} = data;
+    const {message, state, target, chan} = data;
 
-    console.log(data);
+    // console.log(data);
     if (!method) {method = 'message';}
     switch (method) {
       case 'init': {
@@ -60,22 +68,27 @@ wss.on('connection', ws => {
             data.user && data.user.id ? data.user.id : new Date().valueOf();
         ws.id = id;
         const user = data.user || config.users[id] || {};
-        user.chan = user.chan || 0;
+        user.chan = user.chan || {0: true};
+        if (typeof user.chan !== 'object' || !user.chan[0]) {
+          user.chan = {0: true};
+        }
         user.id = id;
         config.users[id] = user;
 
+        for (let ch of user.chan) {
+          if (!config.chans[ch]) {
+            config.chans[ch] = {state: true};
+            ws.send(JSON.stringify({server: `Created Channel ${ch}`}));
+          } else {
+            broadcast(`has joined!`, user);
+          }
+        }
+
         ws.send(JSON.stringify({
           server: `Connected as ${user.name ? user.name : ''}(${
-              user.id}) to Channel: ${user.chan}.`,
+              user.id}) to Channels: [${Array.from(Object.keys(user.chan))}].`,
           user
         }));
-
-        if (!config.chans[user.chan]) {
-          config.chans[user.chan] = {sstates: []};
-          ws.send(JSON.stringify({server: `Created Channel ${user.chan}`}));
-        } else {
-          broadcast(`has joined!`, user);
-        }
         break;
       }
       case 'channel': {
@@ -131,7 +144,11 @@ wss.on('connection', ws => {
       }
       case 'state': {
         const user = config.users[ws.id];
-        updateState(state, user);
+        if (state) {
+          updateState(state, user);
+        }
+        else {
+        }
         break;
       }
       case 'message': {
