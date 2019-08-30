@@ -154,7 +154,7 @@ wss.on('connection', ws => {
             server: `Left Channel ${message}.`,
             user
           }));
-          broadcast_s(time, `has left!`, user);
+          broadcast_s(time, `has left!`, user, message);
         }
         break;
       }
