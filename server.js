@@ -12,7 +12,7 @@ const server = express()
 
 const wss = new SocketServer({server});
 const config = {
-  chans: {0: {state: false}},
+  chans: {'0': {state: false}},
   users: {},
   name2Id: {}
 };
@@ -27,7 +27,7 @@ const deliver = (message, chanId, targetId) => {
     if ((targetId && client.id === targetId) ||
         (chanId && config.users[client.id].chan[chanId]) ||
         !chanId) { /* This is a bit of a hack. If not chatId is passed, 
-          broadcast is called from init. As channel 0 is default, 
+          broadcast is called from init. As channel '0' is default, 
           everyone is notified via this channel. 
           Mutli channel broadcast will need to be implemented if a default channel d.n.e. #TODO:*/
       client.send(message);
@@ -90,9 +90,9 @@ wss.on('connection', ws => {
             data.user && data.user.id ? data.user.id : new Date().valueOf();
         ws.id = id;
         const user = data.user || config.users[id] || {};
-        user.chan = user.chan || {0: true};
-        if (typeof user.chan !== 'object' || !user.chan[0]) {
-          user.chan = {0: true};
+        user.chan = user.chan || {'0': true};
+        if (typeof user.chan !== 'object' || !user.chan['0']) {
+          user.chan = {'0': true};
         }
         user.id = id;
         config.users[id] = user;
