@@ -16,11 +16,20 @@ const config = {
   users: {},
   name2Id: {}
 };
+const history = {
+  users: {},
+  chans: {},
+  raw: []
+};
 
 const deliver = (message, chanId, targetId) => {
   for (let client of wss.clients) {
     if ((targetId && client.id === targetId) ||
-        (!targetId && config.users[client.id].chan === chanId)) {
+        (chanId && config.users[client.id].chan[chanId]) ||
+        !chanId) { /* This is a bit of a hack. If not chatId is passed, 
+          broadcast is called from init. As channel 0 is default, 
+          everyone is notified via this channel. 
+          Mutli channel broadcast will need to be implemented if a default channel d.n.e. #TODO:*/
       client.send(message);
       if (targetId) {
         return;
@@ -29,26 +38,38 @@ const deliver = (message, chanId, targetId) => {
   }
 };
 
-const broadcast = (message, user, targetId) => {
-  deliver(
-      JSON.stringify({
-        message: `${user.name || user.id}: ${message}`,
-        whisper: (targetId) ? true : void (0)
-      }),
-      user.chan, targetId);
+const broadcast = (time, message, user, chan, targetId, forget) => {
+  const post = {
+    time,
+    message: `${user.name || user.id}: ${message}`
+  }
+  if (targetId) {
+    post.whisper = true;
+  }
+  if (!forget) {
+    const index = history.raw.length;
+    const archived = {...post, from: user.id};
+    history.raw.push(archived);
+    history.users[user.id] = history.users[user.id] || [];
+    history.users[user.id].push(index);
+    history.chans[chan || '0'] = history.chans[chan || '0'] || [];
+    history.chans[chan || '0'].push(index);
+  }
+  deliver(JSON.stringify(post), chan, targetId);
 };
 
-const updateState = (state, user) => {
-  for (let chan of user.chan) {
-    let channel = config.chans[chan];
-    if (channel.sstates) {
-      channel.sstates.push(state);
-    }
-    else if (channel.state) {
-      channel.sstates = [state];
-    }
+// wrapper around broadcast because I dont feel like doing this properly
+const broadcast_s = (time, message, user, chan, targetId) => broadcast(time, message, user, chan, targetId, true)
+
+const updateState = (time, state, user, chan) => {
+  let channel = config.chans[chan];
+  if (channel.sstates) {
+    channel.sstates.push(state);
+    deliver(JSON.stringify({time, state, user}), chan);
   }
-  deliver(JSON.stringify({state, user}), user.chan);
+  else {
+    ws.send(JSON.stringify({error: `Channel ${channel} is not ready for state`}));
+  }
 };
 
 wss.on('connection', ws => {
@@ -59,8 +80,9 @@ wss.on('connection', ws => {
     data = JSON.parse(data);
     let {method} = data;
     const {message, state, target, chan} = data;
+    const time = (new Date()).valueOf();
 
-    // console.log(data);
+    console.log(data);
     if (!method) {method = 'message';}
     switch (method) {
       case 'init': {
@@ -75,12 +97,12 @@ wss.on('connection', ws => {
         user.id = id;
         config.users[id] = user;
 
-        for (let ch of user.chan) {
+        for (let ch in user.chan) {
           if (!config.chans[ch]) {
             config.chans[ch] = {state: true};
             ws.send(JSON.stringify({server: `Created Channel ${ch}`}));
           } else {
-            broadcast(`has joined!`, user);
+            broadcast_s(time, `has joined!`, user);
           }
         }
 
@@ -93,17 +115,46 @@ wss.on('connection', ws => {
       }
       case 'channel': {
         const user = config.users[ws.id];
-        config.users[ws.id].chan = message;
-        ws.send(JSON.stringify({
-          server: `Connected as ${user.name ? user.name : ''}(${
-              user.id}) to Channel: ${user.chan}.`,
-          user
-        }));
-        if (!config.chans[user.chan]) {
-          config.chans[user.chan] = {sstates: []};
-          ws.send(JSON.stringify({server: `Created Channel ${user.chan}`}));
-        } else {
-          broadcast(`has joined!`, user);
+        if (message === '0') {
+          ws.send(JSON.stringify({server: `Channel ${message} is read-only.`}));
+        }
+        else if (config.users[ws.id].chan[message]) {
+          ws.send(JSON.stringify({server: `${user.name ? user.name : ''}(${user.id}) is already member of Channel ${user.chan}.`}));
+        }
+        else {
+          config.users[ws.id].chan[message] = true;
+          ws.send(JSON.stringify({
+            server: `Connected as ${user.name ? user.name : ''}(${
+                user.id}) to Channel ${message}.`,
+            user
+          }));
+          if (!config.chans[message]) {
+            config.chans[message] = {state: true};
+            ws.send(JSON.stringify({server: `Created Channel ${message}.`}));
+          } else {
+            broadcast_s(time, `has joined!`, user, message);
+          }
+          break;
+        }
+      }
+      case 'leave': {
+        const user = config.users[ws.id];
+        if (!config.chans[message]) {
+          ws.send(JSON.stringify({server: `Channel ${message} does not exist.`}));
+        }
+        else if (message === '0') {
+          ws.send(JSON.stringify({server: `Channel ${message} cannot be left.`}));
+        }
+        else if (!user.chan[message]) {
+          ws.send(JSON.stringify({server: `${user.name ? user.name : ''}(${user.id}) is not a member of Channel ${user.chan}.`}));
+        }
+        else {
+          delete config.users[ws.id].chan[message];
+          ws.send(JSON.stringify({
+            server: `Left Channel ${message}.`,
+            user
+          }));
+          broadcast_s(time, `has left!`, user);
         }
         break;
       }
@@ -136,7 +187,7 @@ wss.on('connection', ws => {
         // send to user A
         const tid = (other) ? other.id : config.name2Id[target] || target;
         if (config.users[tid]) {
-          broadcast(message, user, tid)
+          broadcast(time, message, user, '', tid)
         } else {
           ws.send(JSON.stringify({server: `${tid} is not a valid user.`}));
         }
@@ -145,15 +196,22 @@ wss.on('connection', ws => {
       case 'state': {
         const user = config.users[ws.id];
         if (state) {
-          updateState(state, user);
+          updateState(time, state, user, chan);
         }
         else {
+          if (!config.chans[chan].state) {
+            ws.send(JSON.stringify({server: `Channel ${chan} does not accept state.`}));
+          }
+          else {
+            config.chans[chan].sstates = [];
+            ws.send(JSON.stringify({server: `Channel ${chan} is now ready to accept state.`}));
+          }
         }
         break;
       }
       case 'message': {
         const user = config.users[ws.id];
-        broadcast(message, user);
+        broadcast(time, message, user, chan);
         break;
       }
       default: {

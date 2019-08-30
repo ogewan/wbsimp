@@ -24,6 +24,9 @@
     <div id="chat">
         <div id="chatheader">Click here to move</div>
         <textarea id='display' disabled="disabled"></textarea><br>
+        <select id="activeChannel">
+            <option value='0'>0 (All)</option>
+        </select>
         <input type="text" id="input" />
     </div>
     <script>
@@ -103,6 +106,7 @@
             if (e.code === 'Enter') {
                 let message = input.value;
                 let method;
+                const chan = document.getElementById('activeChannel').value;
                 if (message.length && message[0] === '\\') {
                     message = message.split('');
                     const cmdend = message.indexOf(' ');
@@ -117,7 +121,7 @@
                     method.shift();
                     method = method.join('');
                 }
-                ws.send(JSON.stringify({ message, method }));
+                ws.send(JSON.stringify({ message, method, chan }));
                 input.value = '';
             }
         })
